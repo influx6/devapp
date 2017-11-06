@@ -1,8 +1,26 @@
 package home
 
-import "github.com/influx6/faux/httputil"
+import (
+	"net/http"
+
+	"github.com/influx6/devapp/static"
+	"github.com/influx6/faux/httputil"
+	"github.com/influx6/faux/tmplutil"
+)
+
+var (
+	views = tmplutil.New().
+		Add("index.layout", static.MustReadFile("templates/index.tml", true)).
+		Add("home.content", MustReadFile("home.tml", true))
+)
 
 // Render renders the page for the home view.
 func Render(ctx *httputil.Context) error {
-	return ctx.HTMLBlob(200, MustReadFileByte("home.html", true))
+	tmpl, err := views.From("index.layout", "home.content")
+	if err != nil {
+		return err
+	}
+
+	ctx.AddHeader("Content-Type", "text/html")
+	return ctx.Template(http.StatusOK, tmpl, struct{}{})
 }
