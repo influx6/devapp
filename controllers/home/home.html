@@ -1,5 +1,18 @@
 {{define "content"}}
-  Welcome to Alive Home!
+<section class="login grid-full grid-center one-whole one-whole-height">
+  <form class="user_form login_form grid-block grid-full" action="/session/new" method="post">
+    <fieldset class="username_fieldset">
+      <input class="one-whole" type="text" name="username" value="" placeholder="Username">
+    </fieldset>
+    <fieldset class="username_fieldset">
+      <input class="one-whole" type="text" name="password" value="" placeholder="Password">
+    </fieldset>
+    <fieldset>
+      <button type="submit" name="submit">Login</button>
+      <a class="signup" href="/signup">Signup</a>
+    </fieldset>
+  </form>
+</section>
 {{end}}
 {{define "scripts"}}
   <script src=""></script>

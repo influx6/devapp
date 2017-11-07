@@ -141,10 +141,8 @@ func settingBundle() {
 		return
 	}
 
-	cssPublicDir := filepath.Join(settings.Public.Path, "css")
-	cssPublic := filepath.Join(settings.Public.Path, "css/theme.css")
-
-	if err = os.MkdirAll(cssPublicDir, 0777); err != nil && err != os.ErrExist {
+	cssPublic := filepath.Join("css", "theme.css")
+	if err = os.MkdirAll("css", 0777); err != nil && err != os.ErrExist {
 		log.Fatalf("Failed to create css directory: %+q", err)
 		return
 	}

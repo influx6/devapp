@@ -1,5 +1,7 @@
 package home
 
+//go:generate go run generate.go
+
 import (
 	"net/http"
 
@@ -10,8 +12,8 @@ import (
 
 var (
 	views = tmplutil.New().
-		Add("index.layout", static.MustReadFile("templates/index.tml", true)).
-		Add("home.content", MustReadFile("home.tml", true))
+		Add("index.layout", static.MustReadFile("templates/index.html", true)).
+		Add("home.content", MustReadFile("home.html", true))
 )
 
 // Render renders the page for the home view.
