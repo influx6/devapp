@@ -1,0 +1,5 @@
+export DEVAPP_MONGO_USER=
+export DEVAPP_MONGO_DB=devapps
+export DEVAPP_MONGO_AUTHDB=devapps
+export DEVAPP_MONGO_PASSWORD=
+export DEVAPP_MONGO_HOST=localhost:27017

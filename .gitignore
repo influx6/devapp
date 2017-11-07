@@ -1,3 +1,5 @@
 .air.conf
 .DS_Store
 .conf.db
+.conf.db.*
+gin-bin
