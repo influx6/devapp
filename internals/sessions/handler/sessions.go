@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/influx6/backoffice/models/session"
+	"github.com/influx6/devapp/internals/sessions"
 	"github.com/influx6/devapp/internals/sessions/db"
 	"github.com/influx6/devapp/internals/sessions/mdb"
+	users "github.com/influx6/devapp/internals/users"
 	userdbapi "github.com/influx6/devapp/internals/users/db"
 	userdb "github.com/influx6/devapp/internals/users/mdb"
 
@@ -17,10 +19,38 @@ import (
 	"github.com/influx6/faux/metrics"
 )
 
+// errors ...
+var (
+	ErrFailedOTPAuth = errors.New("Failed to match otp authorization")
+	ErrFailedLogin   = errors.New("Failed to authenticate login credentails or no AUTH credentials found")
+)
+
 // SessionAPI implements the http api for responding to session request.
 type SessionAPI struct {
 	DB     *mdb.SessionDB
 	UserDB *userdb.UserDB
+}
+
+// AuthenticateMW returns a httputil middleware which handles obstruction of
+// un-authenticate requests.
+func (s SessionAPI) AuthenticateMW() httputil.Middleware {
+	return func(next httputil.Handler) httputil.Handler {
+		return s.AuthenticateHandlers(next)
+	}
+}
+
+// AuthenticateHandlers returns a middleware function which wraps any handler
+// to validate authorization else returning appropriate error has required.
+func (s SessionAPI) AuthenticateHandlers(next httputil.Handler) httputil.Handler {
+	return func(ctx *httputil.Context) error {
+		if err := s.Authenticate(ctx); err != nil {
+			ctx.Metrics().Emit(metrics.Error(err).WithMessage("Failed to authenticate request"))
+			return err
+		}
+
+		ctx.Metrics().Emit(metrics.Info("Request authenticated"))
+		return next(ctx)
+	}
 }
 
 // Authenticate handles relogin request for a previously authenticated/logged in user, returning
@@ -47,7 +77,7 @@ func (s SessionAPI) Authenticate(ctx *httputil.Context) error {
 	authtype, token, err := httputil.ParseAuthorization(authorization)
 	if err != nil {
 		return httputil.HTTPError{
-			Err:  err,
+			Err:  ErrFailedLogin,
 			Code: http.StatusBadRequest,
 		}
 	}
@@ -71,7 +101,7 @@ func (s SessionAPI) Authenticate(ctx *httputil.Context) error {
 
 	ctx.Metrics().Emit(metrics.Info("Retreived Session User record").With("user", sessionUserID))
 
-	_, err = userdbapi.Get(ctx, ctx.Metrics(), s.UserDB, sessionUserID)
+	ruser, err := userdbapi.Get(ctx, ctx.Metrics(), s.UserDB, sessionUserID)
 	if err != nil {
 		ctx.Metrics().Emit(metrics.Error(err).WithMessage("Failed to retreived Session User record").With("user", sessionUserID))
 		return httputil.HTTPError{
@@ -96,7 +126,7 @@ func (s SessionAPI) Authenticate(ctx *httputil.Context) error {
 			With("user", sessionUserID).
 			With("token", sessionToken).
 			With("session", userSession))
-		return err
+		return ErrFailedLogin
 	}
 
 	if userSession.Expired() {
@@ -110,6 +140,9 @@ func (s SessionAPI) Authenticate(ctx *httputil.Context) error {
 
 		return err
 	}
+
+	ctx.Bag().Set(users.NilUser, ruser)
+	ctx.Bag().Set(sessions.NilSession, userSession)
 
 	ctx.Metrics().Emit(metrics.Info("User session is valid and authenticated").With("user", sessionUserID))
 
@@ -160,6 +193,9 @@ func (s SessionAPI) Login(ctx *httputil.Context) error {
 			Code: http.StatusInternalServerError,
 		}
 	}
+
+	ctx.Bag().Set(users.NilUser, user)
+	ctx.Bag().Set(sessions.NilSession, newSession)
 
 	authValue := fmt.Sprintf("Bearer %s", newSession.SessionToken())
 	privateid := base64.StdEncoding.EncodeToString([]byte(authValue))

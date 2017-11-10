@@ -1,14 +1,25 @@
 package users
 
 import (
+	"crypto"
+	"encoding/base64"
+
 	"golang.org/x/crypto/bcrypt"
 
 	uuid "github.com/satori/go.uuid"
+	"github.com/sec51/twofactor"
 )
 
 const (
 	hashComplexity = 10
 	timeFormat     = "Mon Jan 2 15:04:05 -0700 MST 2006"
+	twofactorOrg   = "devapps.in"
+)
+
+var (
+	// NilUser defines a nil type of user value useful for retrieving a User from
+	// a httputil.Context
+	NilUser = ((*User)(nil))
 )
 
 // UpdateUserPassword defines the set of data sent when updating a users password.
@@ -31,11 +42,12 @@ type NewUser struct {
 // @mongoapi
 // @associates(@mongoapi, New, NewUser)
 type User struct {
-	Username  string `json:"username" bson:"username"`
-	PublicID  string `json:"public_id" bson:"public_id"`
-	PrivateID string `json:"private_id,omitempty" bson:"private_id"`
-	Hash      string `json:"hash,omitempty" bson:"hash"`
-	TwoFactor bool   `json:"two_factor_enabled,omitempty" bson:"two_factor_enabled"`
+	TOTP         string `json:"totp" bson:"totp"`
+	Username     string `json:"username" bson:"username"`
+	PublicID     string `json:"public_id" bson:"public_id"`
+	PrivateID    string `json:"private_id,omitempty" bson:"private_id"`
+	Hash         string `json:"hash,omitempty" bson:"hash"`
+	UseTwoFactor bool   `json:"use_twofactor" bson:"use_twofactor"`
 }
 
 // New returns a new User instance based on the provided data.
@@ -45,9 +57,64 @@ func New(nw NewUser) (User, error) {
 	u.PublicID = uuid.NewV4().String()
 	u.PrivateID = uuid.NewV4().String()
 
+	totp, err := twofactor.NewTOTP(u.PublicID, twofactorOrg, crypto.SHA1, 8)
+	if err != nil {
+		return u, err
+	}
+
+	totpbytes, err := totp.ToBytes()
+	if err != nil {
+		return u, err
+	}
+
+	u.TOTP = base64.StdEncoding.EncodeToString(totpbytes)
 	u.ChangePassword(nw.Password)
 
 	return u, nil
+}
+
+// ValidateOTP validates provided OTP code from google authenticator.
+func (u User) ValidateOTP(userCode string) error {
+	data, err := base64.StdEncoding.DecodeString(u.TOTP)
+	if err != nil {
+		return err
+	}
+
+	totp, err := twofactor.TOTPFromBytes(data, twofactorOrg)
+	if err != nil {
+		return err
+	}
+
+	return totp.Validate(userCode)
+}
+
+// QR returns the User.TwoFactorQR data as string instead of bytes.
+func (u User) QR() (string, error) {
+	twqr, err := u.TwoFactorQR()
+	if err != nil {
+		return "", err
+	}
+	return string(twqr), nil
+}
+
+// TwoFactorQR returns QR code associated with given
+func (u User) TwoFactorQR() ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(u.TOTP)
+	if err != nil {
+		return nil, err
+	}
+
+	totp, err := twofactor.TOTPFromBytes(data, twofactorOrg)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := totp.QR()
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(base64.StdEncoding.EncodeToString(qr)), nil
 }
 
 // Authenticate attempts to authenticate the giving password to the provided user.
@@ -70,11 +137,12 @@ func (u User) SafeFields() map[string]interface{} {
 // Fields returns a map representing the data of the user.
 func (u User) Fields() map[string]interface{} {
 	fields := map[string]interface{}{
-		"hash":               u.Hash,
-		"username":           u.Username,
-		"private_id":         u.PrivateID,
-		"public_id":          u.PublicID,
-		"two_factor_enabled": u.TwoFactor,
+		"hash":          u.Hash,
+		"username":      u.Username,
+		"private_id":    u.PrivateID,
+		"public_id":     u.PublicID,
+		"totp":          u.TOTP,
+		"use_twofactor": u.UseTwoFactor,
 	}
 
 	return fields

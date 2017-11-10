@@ -327,7 +327,9 @@ func (mdb *UserDB) Create(ctx context.Context, elem users.User) error {
 
 		"public_id": elem.PublicID,
 
-		"two_factor_enabled": elem.TwoFactor,
+		"totp": elem.TOTP,
+
+		"use_twofactor": elem.UseTwoFactor,
 
 		"username": elem.Username,
 	})
@@ -348,10 +350,9 @@ func (mdb *UserDB) Create(ctx context.Context, elem users.User) error {
 		return err
 	}
 
-	mdb.metrics.Emit(metrics.Info("Record created").
+	mdb.metrics.Emit(metrics.Info("Create record").
 		With("collection", mdb.col).
-		With("query", query).
-		With("elem", elem))
+		With("query", query))
 
 	return nil
 }
@@ -734,7 +735,9 @@ func (mdb *UserDB) Update(ctx context.Context, publicID string, elem users.User)
 
 		"public_id": elem.PublicID,
 
-		"two_factor_enabled": elem.TwoFactor,
+		"totp": elem.TOTP,
+
+		"use_twofactor": elem.UseTwoFactor,
 
 		"username": elem.Username,
 	})

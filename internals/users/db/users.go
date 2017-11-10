@@ -41,16 +41,16 @@ func GetByUsername(ctx context.Context, log metrics.Metrics, db *mdb.UserDB, use
 }
 
 // Get handles receiving requests to retrieve a user from the database.
-func Get(ctx context.Context, log metrics.Metrics, db *mdb.UserDB, id string) (*users.User, error) {
+func Get(ctx context.Context, log metrics.Metrics, db *mdb.UserDB, id string) (users.User, error) {
 	log.Emit(metrics.Info("Get Existing User").With("user_id", id))
 
 	nu, err := db.Get(ctx, id)
 	if err != nil {
 		log.Emit(metrics.Error(err).WithFields(metrics.Field{"public_id": id}))
-		return nil, err
+		return nu, err
 	}
 
-	return &nu, nil
+	return nu, nil
 }
 
 // UserRecords defines a struct which returns the total fields and page details

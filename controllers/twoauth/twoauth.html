@@ -1,18 +1,21 @@
-<html>
-  <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:title" content="twoauth">
-  <meta property="og:description" content="App:twoauth">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="twoauth">
-  <meta name="twitter:description" content="App:twoauth">
-  <link rel="apple-touch-icon-precomposed" href="assets/img/icons/apple-touch-icon.png">
-  <link rel="icon" type="image/png" href="assets/img/icons/favicon.png" >
-  <link href="https://fonts.googleapis.com/css?family=Monoton|Noto+Sans|Noto+Serif|Roboto|Roboto+Condensed|Roboto+Mono" rel="stylesheet" />
-  </head>
-  <body>
-    <script type="text/javascript" src="js/main.js">
-    </script>
-  </body>
-<html>
+{{define "nav"}}
+{{end}}
+{{define "content"}}
+<section class="two-factor grid-block grid-full">
+  <section class="bar-code grid-block grid-half one-half">
+    <img src="data:image/png;base64,{{.User.QR}}" />
+  </section>
+  <section class="twofactor-code grid-block grid-half one-half">
+    <p>Enter Authorization Code from Google Authenticator</p>
+    <form class="twofactor-code-form" action="" method="">
+      <input type="hidden" name="user_name" value="{{.User.Username}}">
+      <input type="hidden" name="user_public_id" value="{{.User.PublicID}}">
+      <input type="text" name="userCode" value="" placeholder="GoogleAuth Code">
+      <input type="submit" name="submit" value="Submit">
+    </form>
+  </section>
+</section>
+{{end}}
+{{define "styles"}}
+<link rel="stylesheet" href="/static-controllers/twoauth/master.css">
+{{end}}

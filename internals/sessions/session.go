@@ -18,6 +18,11 @@ const (
 	UniqueIndexField = "user_public_id"
 )
 
+// nil session
+var (
+	NilSession = ((*Session)(nil))
+)
+
 // NewSession defines the set of data received to create a new user's session.
 type NewSession struct {
 	Email    string `json:"email"`

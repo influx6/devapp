@@ -11,6 +11,8 @@ import (
 var userJSON = `{
 
 
+    "totp":	"",
+
     "username":	"",
 
     "public_id":	"",
@@ -19,29 +21,31 @@ var userJSON = `{
 
     "hash":	"",
 
-    "two_factor_enabled":	false
+    "use_twofactor":	false
 
 }`
 
 var userCreateJSON = `{
 
 
+    "username":	"",
+
+    "public_id":	"",
+
     "private_id":	"",
 
     "hash":	"",
 
-    "two_factor_enabled":	false,
+    "use_twofactor":	false,
 
-    "username":	"",
-
-    "public_id":	""
+    "totp":	""
 
 }`
 
 var userUpdateJSON = `{
 
 
-    "two_factor_enabled":	false,
+    "totp":	"",
 
     "username":	"",
 
@@ -49,7 +53,9 @@ var userUpdateJSON = `{
 
     "private_id":	"",
 
-    "hash":	""
+    "hash":	"",
+
+    "use_twofactor":	false
 
 }`
 
