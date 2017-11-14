@@ -102,7 +102,7 @@ Note, all provided user token keys becomes invalid after use.
 - Get User profile with Two Factor enabled
 
 ```bash
-> curl -i -H "Authorization: Bearer NjhlMjEyNjEtMDhmMi00MzhiLWI3MmQtNzQzYjg3N2UzY2VlOjE1MGEyOTg4LTc1NjgtNGExYy1iZmJhLTBiZjZiNmE2ZWI3Yg==" http://127.0.0.1:3000/users/twofactor/disable?token=846371
+> curl -i -H "Authorization: Bearer NjhlMjEyNjEtMDhmMi00MzhiLWI3MmQtNzQzYjg3N2UzY2VlOjE1MGEyOTg4LTc1NjgtNGExYy1iZmJhLTBiZjZiNmE2ZWI3Yg==" http://127.0.0.1:3000/users/twofactor/disable?token=786382
 HTTP/1.1 200 OK
 Content-Length: 0
 Content-Type: text/plain; charset=utf-8
