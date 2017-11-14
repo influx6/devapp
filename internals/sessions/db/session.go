@@ -106,3 +106,20 @@ func Delete(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, userID 
 
 	return nil
 }
+
+// Update updates an existing session in the db for with its new data.
+func Update(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, session sessions.Session) error {
+	log.Emit(metrics.Info("Delete Existing Session").With("session", session))
+
+	// Update this session.
+	if err := db.Update(ctx, session.PublicID, session); err != nil {
+		log.Emit(metrics.Error(err).WithMessage("Failed to update session from db").
+			With("session", session))
+		return err
+	}
+
+	log.Emit(metrics.Info("Removed user session from db").
+		With("session", session))
+
+	return nil
+}

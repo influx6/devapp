@@ -17,6 +17,7 @@ import (
 	"github.com/influx6/devapp/controllers/twoauth"
 	sessionsapi "github.com/influx6/devapp/internals/sessions/handler"
 	sessionsdbapi "github.com/influx6/devapp/internals/sessions/mdb"
+	tokensdbapi "github.com/influx6/devapp/internals/tokens/mdb"
 	userapi "github.com/influx6/devapp/internals/users/handler"
 	userdbapi "github.com/influx6/devapp/internals/users/mdb"
 	"github.com/influx6/devapp/static"
@@ -50,7 +51,27 @@ func main() {
 
 	mdb := mongo.New(dbconf)
 	sessionsdb := sessionsdbapi.New("session_collection", logs, mdb, mgo.Index{
-		Key:        []string{"public_id", "user_id"},
+		Key:        []string{"public_id"},
+		Unique:     true,
+		Background: true,
+		Sparse:     true,
+		DropDups:   true,
+	}, mgo.Index{
+		Key:        []string{"user_id"},
+		Unique:     true,
+		Background: true,
+		Sparse:     true,
+		DropDups:   true,
+	})
+
+	tokensdb := tokensdbapi.New("user_tokens_collections", logs, mdb, mgo.Index{
+		Key:        []string{"public_id"},
+		Unique:     true,
+		Background: true,
+		Sparse:     true,
+		DropDups:   true,
+	}, mgo.Index{
+		Key:        []string{"user_id"},
 		Unique:     true,
 		Background: true,
 		Sparse:     true,
@@ -58,7 +79,13 @@ func main() {
 	})
 
 	usersdb := userdbapi.New("user_collection", logs, mdb, mgo.Index{
-		Key:        []string{"public_id", "username"},
+		Key:        []string{"public_id"},
+		Unique:     true,
+		Background: true,
+		Sparse:     true,
+		DropDups:   true,
+	}, mgo.Index{
+		Key:        []string{"username"},
 		Unique:     true,
 		Background: true,
 		Sparse:     true,
@@ -77,9 +104,8 @@ func main() {
 		filesystem.StripPrefix("/", bytereaders.FileFromByteReader(twoauth.FindFileReader))),
 	)
 
-	users := userapi.UserAPI{DB: usersdb}
-	sessions := sessionsapi.SessionAPI{DB: sessionsdb, UserDB: usersdb}
-	// profiles := profileapi.ProfileAPI{Sessions: sessions}
+	users := userapi.UserAPI{DB: usersdb, Tokens: tokensdb}
+	sessions := sessionsapi.SessionAPI{DB: sessionsdb, UserDB: usersdb, TokensDB: tokensdb}
 
 	m := mux.NewRouter()
 	m.NotFoundHandler = httputil.HTTPFunc(httputil.NotFound)
@@ -200,12 +226,6 @@ func main() {
 			httputil.BadRequest,
 		),
 	)))
-
-	// // api routes
-	// m.HandleFunc("/api/profiles", httputil.HTTPFunc(mw(profiles.Get)))
-	// m.HandleFunc("/api/users/new", httputil.HTTPFunc(mw(users.CreateUserFromURLEncoded)))
-	// m.HandleFunc("/api/sessions/login", httputil.HTTPFunc(mw(sessions.Login)))
-	// m.HandleFunc("/api/sessions/logout", httputil.HTTPFunc(mw(sessions.Logout)))
 
 	server, err := httputil.Listen(false, fmt.Sprintf(":%s", *port), m)
 	if err != nil {

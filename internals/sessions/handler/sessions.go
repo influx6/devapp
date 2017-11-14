@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/influx6/backoffice/models/session"
 	"github.com/influx6/devapp/internals/sessions"
 	"github.com/influx6/devapp/internals/sessions/db"
 	"github.com/influx6/devapp/internals/sessions/mdb"
+	tokensdb "github.com/influx6/devapp/internals/tokens/db"
+	tokensmdb "github.com/influx6/devapp/internals/tokens/mdb"
 	users "github.com/influx6/devapp/internals/users"
 	userdbapi "github.com/influx6/devapp/internals/users/db"
 	userdb "github.com/influx6/devapp/internals/users/mdb"
@@ -30,8 +33,9 @@ var (
 
 // SessionAPI implements the http api for responding to session request.
 type SessionAPI struct {
-	DB     *mdb.SessionDB
-	UserDB *userdb.UserDB
+	DB       *mdb.SessionDB
+	UserDB   *userdb.UserDB
+	TokensDB *tokensmdb.TokenRecordDB
 }
 
 // TwoFactorAuthorizationCheck validates that a given user has being logged in, then checks if
@@ -93,6 +97,10 @@ func (s SessionAPI) TwoFactorAuthorization(ctx *httputil.Context) error {
 		}
 	}
 
+	if !user.UseTwoFactor {
+		return nil
+	}
+
 	sessionrec, ok := ctx.Bag().Get(sessions.NilSession)
 	if !ok {
 		return errors.New("No Session currently available")
@@ -110,6 +118,22 @@ func (s SessionAPI) TwoFactorAuthorization(ctx *httputil.Context) error {
 		return errors.New("No twofactor token provided")
 	}
 
+	usedToken, err := tokensdb.UsedToken(ctx, ctx.Metrics(), s.TokensDB, user, token)
+	if err != nil {
+		return httputil.HTTPError{
+			Err:  err,
+			Code: http.StatusInternalServerError,
+		}
+	}
+
+	if usedToken {
+		ctx.SetFlash("error", "Token provided is already used: Try again")
+		return httputil.HTTPError{
+			Code: http.StatusBadRequest,
+			Err:  fmt.Errorf("User already used token"),
+		}
+	}
+
 	ctx.Metrics().Emit(metrics.Info("Recieved TwoFactor Token for Authorization").With("token", token))
 
 	if err := user.ValidateOTP(token); err != nil {
@@ -121,6 +145,13 @@ func (s SessionAPI) TwoFactorAuthorization(ctx *httputil.Context) error {
 		}
 
 		return err
+	}
+
+	if err := tokensdb.AddToken(ctx, ctx.Metrics(), s.TokensDB, user, token); err != nil {
+		return httputil.HTTPError{
+			Code: http.StatusInternalServerError,
+			Err:  fmt.Errorf("Failed to update user tokens TOTP Update: %+q", err),
+		}
 	}
 
 	if err := userdbapi.UpdateTOTP(ctx, ctx.Metrics(), s.UserDB, user); err != nil {
@@ -140,28 +171,6 @@ func (s SessionAPI) TwoFactorAuthorization(ctx *httputil.Context) error {
 	ctx.Bag().Set(sessions.NilSession, session)
 
 	return nil
-}
-
-// AuthenticateMW returns a httputil middleware which handles obstruction of
-// un-authenticate requests.
-func (s SessionAPI) AuthenticateMW() httputil.Middleware {
-	return func(next httputil.Handler) httputil.Handler {
-		return s.AuthenticateHandlers(next)
-	}
-}
-
-// AuthenticateHandlers returns a middleware function which wraps any handler
-// to validate authorization else returning appropriate error has required.
-func (s SessionAPI) AuthenticateHandlers(next httputil.Handler) httputil.Handler {
-	return func(ctx *httputil.Context) error {
-		if err := s.Authenticate(ctx); err != nil {
-			ctx.Metrics().Emit(metrics.Error(err).WithMessage("Failed to authenticate request"))
-			return err
-		}
-
-		ctx.Metrics().Emit(metrics.Info("Request authenticated"))
-		return next(ctx)
-	}
 }
 
 // Authenticate handles relogin request for a previously authenticated/logged in user, returning
@@ -297,25 +306,39 @@ func (s SessionAPI) Login(ctx *httputil.Context) error {
 		}
 	}
 
-	newSession, err := db.Create(ctx, ctx.Metrics(), s.DB, httputil.FourthyEightHoursDuration, user)
+	userSession, err := db.Get(ctx, ctx.Metrics(), s.DB, user.PublicID)
 	if err != nil {
-		return httputil.HTTPError{
-			Err:  fmt.Errorf("Unable to create session: %+q", err),
-			Code: http.StatusInternalServerError,
+		if userSession, err = db.Create(ctx, ctx.Metrics(), s.DB, httputil.FourthyEightHoursDuration, user); err != nil {
+			return httputil.HTTPError{
+				Err:  fmt.Errorf("Unable to create session: %+q", err),
+				Code: http.StatusInternalServerError,
+			}
+		}
+	}
+
+	// if Session has expired, renew and reset for two factor authentication.
+	if userSession.Expired() {
+		userSession.TwoFactorDone = false
+		userSession.Expires = time.Now().Add(httputil.FourthyEightHoursDuration)
+		if err := db.Update(ctx, ctx.Metrics(), s.DB, userSession); err != nil {
+			return httputil.HTTPError{
+				Err:  fmt.Errorf("Unable to renew user session: %+q", err),
+				Code: http.StatusInternalServerError,
+			}
 		}
 	}
 
 	ctx.Bag().Set(users.NilUser, user)
-	ctx.Bag().Set(sessions.NilSession, newSession)
+	ctx.Bag().Set(sessions.NilSession, userSession)
 
-	authValue := fmt.Sprintf("Bearer %s", newSession.SessionToken())
+	authValue := fmt.Sprintf("Bearer %s", userSession.SessionToken())
 	privateid := base64.StdEncoding.EncodeToString([]byte(authValue))
 
 	ctx.SetHeader("Authorization", authValue)
 	ctx.SetCookie(&http.Cookie{
 		Name:    "Authorization",
 		Value:   privateid,
-		Expires: newSession.Expires,
+		Expires: userSession.Expires,
 		Path:    "/",
 	})
 

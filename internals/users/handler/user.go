@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	tokensdb "github.com/influx6/devapp/internals/tokens/db"
+	tokensmdb "github.com/influx6/devapp/internals/tokens/mdb"
 	"github.com/influx6/devapp/internals/users"
 	"github.com/influx6/devapp/internals/users/db"
 	"github.com/influx6/devapp/internals/users/mdb"
@@ -18,7 +20,8 @@ import (
 
 // UserAPI exposes controller methods for user http apis
 type UserAPI struct {
-	DB *mdb.UserDB
+	DB     *mdb.UserDB
+	Tokens *tokensmdb.TokenRecordDB
 }
 
 // EnableTwoFactor enables two factor autnetication and directs user to run to
@@ -37,6 +40,10 @@ func (u UserAPI) EnableTwoFactor(ctx *httputil.Context) error {
 			Err:  errors.New("User type for User key is invalid"),
 			Code: http.StatusInternalServerError,
 		}
+	}
+
+	if user.UseTwoFactor && user.TOTP != "" {
+		return nil
 	}
 
 	totp, err := twofactor.NewTOTP(user.PublicID, users.TwofactorOrg, crypto.SHA1, 6)
@@ -66,6 +73,13 @@ func (u UserAPI) EnableTwoFactor(ctx *httputil.Context) error {
 	}
 
 	ctx.Bag().Set(users.NilUser, user)
+
+	if _, err := tokensdb.Create(ctx, ctx.Metrics(), u.Tokens, user); err != nil {
+		return httputil.HTTPError{
+			Err:  err,
+			Code: http.StatusInternalServerError,
+		}
+	}
 
 	return nil
 }
@@ -150,6 +164,14 @@ func (u UserAPI) UserTwoFactorQRImage(ctx *httputil.Context) error {
 		}
 	}
 
+	if user.TOTP == "" {
+		return errors.New("Enable TwoFactor first")
+	}
+
+	// if user.SeenTwoFactor {
+	// 	return nil
+	// }
+
 	qr, err := user.TwoFactorQR()
 	if err != nil {
 		return err
@@ -173,6 +195,14 @@ func (u UserAPI) UserTwoFactorQTURL(ctx *httputil.Context) error {
 			Code: http.StatusInternalServerError,
 		}
 	}
+
+	if user.TOTP == "" {
+		return errors.New("Enable TwoFactor first")
+	}
+
+	// if user.SeenTwoFactor {
+	// 	return nil
+	// }
 
 	qr, err := user.TwoFactorURL()
 	if err != nil {

@@ -11,6 +11,9 @@ import (
 // Handler defines a function type to process a giving request.
 type Handler func(*Context) error
 
+// ErrorHandler defines a function type which sets giving respnse to a Response object.
+type ErrorHandler func(error, *Context) error
+
 // HandlerMW defines a function which wraps a provided http.handlerFunc
 // which encapsulates the original for a underline operation.
 type HandlerMW func(Handler, ...Middleware) Handler
@@ -63,6 +66,18 @@ func OKRequest(ctx *Context) error {
 	return nil
 }
 
+// BadRequestWithError implements a Handler which returns http.StatusBagRequest always.
+func BadRequestWithError(err error, ctx *Context) error {
+	if err != nil {
+		if httperr, ok := err.(HTTPError); ok {
+			http.Error(ctx.Response(), httperr.Error(), httperr.Code)
+			return nil
+		}
+		http.Error(ctx.Response(), err.Error(), http.StatusBadRequest)
+	}
+	return nil
+}
+
 // BadRequest implements a Handler which returns http.StatusBagRequest always.
 func BadRequest(ctx *Context) error {
 	ctx.Status(http.StatusBadRequest)
@@ -106,13 +121,22 @@ func HTTPRedirect(to string, code int) Handler {
 }
 
 // Then calls the next Handler after the condition handler returns without error.
-func Then(condition Handler, next Handler) Handler {
+func Then(condition Handler, nexts ...Handler) Handler {
+	if len(nexts) == 0 {
+		return condition
+	}
+
 	return func(c *Context) error {
 		if err := condition(c); err != nil {
 			return err
 		}
 
-		return next(c)
+		for _, next := range nexts {
+			if err := next(c); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }
 
@@ -128,6 +152,41 @@ func HTTPConditionFunc(condition Handler, noerrorAction, errorAction Handler) Ha
 			return errorAction(ctx)
 		}
 		return noerrorAction(ctx)
+	}
+}
+
+// HTTPConditionErrorFunc returns a handler where a condition Handler is called whoes result if with an error
+// is passed to the errorAction for execution else using the noerrorAction. Differs from HTTPConditionFunc
+// due to the assess to the error value.
+func HTTPConditionErrorFunc(condition Handler, noerrorAction Handler, errorAction ErrorHandler) Handler {
+	return func(ctx *Context) error {
+		if err := condition(ctx); err != nil {
+			ctx.Metrics().Emit(metrics.Error(err).WithMessage("HTTPConditionFunc").With("httputil_handler_error", err))
+			return errorAction(err, ctx)
+		}
+		return noerrorAction(ctx)
+	}
+}
+
+// ErrorsAsResponse returns a Handler which will always write out any error that
+// occurs as the response for a request if any occurs.
+func ErrorsAsResponse(code int, next Handler) Handler {
+	return func(ctx *Context) error {
+		if err := next(ctx); err != nil {
+			ctx.Metrics().Emit(metrics.Error(err).WithMessage("HTTPConditionFunc").With("httputil_handler_error", err))
+			if httperr, ok := err.(HTTPError); ok {
+				http.Error(ctx.Response(), httperr.Error(), httperr.Code)
+				return err
+			}
+
+			if code <= 0 {
+				code = http.StatusBadRequest
+			}
+
+			http.Error(ctx.Response(), err.Error(), code)
+			return err
+		}
+		return nil
 	}
 }
 

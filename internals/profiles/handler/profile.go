@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	sessionsapi "github.com/influx6/devapp/internals/sessions/handler"
 	"github.com/influx6/devapp/internals/users"
 	"github.com/influx6/faux/httputil"
 	"github.com/influx6/faux/metrics"
@@ -12,10 +11,10 @@ import (
 
 // ProfileAPI implements http methods for interfacting with the profile records.
 type ProfileAPI struct {
-	Sessions sessionsapi.SessionAPI
 }
 
-func (p ProfileAPI) getName(ctx *httputil.Context) error {
+// Get retrieves current user profile.
+func (p ProfileAPI) Get(ctx *httputil.Context) error {
 	if userrec, ok := ctx.Bag().Get(users.NilUser); ok {
 		if user, ok := userrec.(users.User); ok {
 			return ctx.Blob(http.StatusOK, "text/plain", []byte(user.Username))
@@ -28,9 +27,4 @@ func (p ProfileAPI) getName(ctx *httputil.Context) error {
 		Err:  err,
 		Code: http.StatusBadRequest,
 	}
-}
-
-// Get returns an appropriate response for a get request.
-func (p ProfileAPI) Get(ctx *httputil.Context) error {
-	return p.Sessions.AuthenticateHandlers(p.getName)(ctx)
 }
