@@ -1,0 +1,5 @@
+export DEVAPP_MONGO_USER=db
+export DEVAPP_MONGO_DB=devapps
+export DEVAPP_MONGO_AUTHDB=devapps
+export DEVAPP_MONGO_PASSWORD=boom*Drop
+export DEVAPP_MONGO_HOST=ds149535.mlab.com:49535
