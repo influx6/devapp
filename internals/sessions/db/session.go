@@ -13,7 +13,7 @@ import (
 )
 
 // Create adds a new session for the specified users.
-func Create(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, expiration time.Duration, nu users.User) (*sessions.Session, error) {
+func Create(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, expiration time.Duration, nu users.User) (sessions.Session, error) {
 	log.Emit(metrics.Info("Create New Session").WithFields(metrics.Field{
 		"username": nu.Username,
 		"user_id":  nu.PublicID,
@@ -29,7 +29,7 @@ func Create(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, expirat
 
 		// We have an existing session and the time of expiring is still counting, simly return
 		if !newSession.Expires.IsZero() && currentTime.Before(newSession.Expires) {
-			return &newSession, nil
+			return newSession, nil
 		}
 
 		// 	If we still have active session, then simply kick it and return safely.
@@ -39,7 +39,7 @@ func Create(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, expirat
 			if err := db.Delete(ctx, newSession.UserID); err != nil {
 				log.Emit(metrics.Error(err).WithMessage("Failed to delete old session").
 					WithFields(metrics.Field{"username": nu.Username, "user_id": nu.PublicID}))
-				return nil, err
+				return newSession, err
 			}
 		}
 	}
@@ -50,10 +50,10 @@ func Create(ctx context.Context, log metrics.Metrics, db *mdb.SessionDB, expirat
 		log.Emit(metrics.Error(err).
 			WithMessage("Failed to save new session").
 			WithFields(metrics.Field{"username": nu.Username, "user_id": nu.PublicID}))
-		return nil, err
+		return newSession, err
 	}
 
-	return &newSession, nil
+	return newSession, nil
 }
 
 // Get retrieves the session associated with the giving User.

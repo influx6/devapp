@@ -2,10 +2,18 @@
 {{define "nav"}}
 <ul>
   <li><a href="/session/destroy">Logout</a></li>
+  {{if .User.UseTwoFactor }}
+  <li><a href="/users/twofactor/disable" onclick="confirm('Are you sure you wish to disable TwoFactor')">Disable TwoFactor</a></li>
+  {{else}}
+  <li><a href="/users/twofactor/enable" onclick="confirm('Are you sure you wish to enable TwoFactor')">Enable TwoFactor</a></li>
+  {{end}}
 </ul>
 {{end}}
 {{define "content"}}
-<section class="grid-block grid-full grid-center one-whole">
-</h2>Welcome to your profile {{quote .User.Username}}</h2>
+<section class="profile-intro grid-block grid-full grid-center one-whole">
+<h2>Welcome to your profile {{quote .User.Username}}</h2>
 </section>
+{{end}}
+{{define "styles"}}
+<link rel="stylesheet" href="/static-controllers/profile/profile.css">
 {{end}}

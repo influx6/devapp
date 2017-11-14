@@ -28,6 +28,8 @@ var userJSON = `{
 var userCreateJSON = `{
 
 
+    "totp":	"",
+
     "username":	"",
 
     "public_id":	"",
@@ -36,9 +38,7 @@ var userCreateJSON = `{
 
     "hash":	"",
 
-    "use_twofactor":	false,
-
-    "totp":	""
+    "use_twofactor":	false
 
 }`
 

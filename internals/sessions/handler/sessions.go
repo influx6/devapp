@@ -21,14 +21,125 @@ import (
 
 // errors ...
 var (
-	ErrFailedOTPAuth = errors.New("Failed to match otp authorization")
-	ErrFailedLogin   = errors.New("Failed to authenticate login credentails or no AUTH credentials found")
+	ErrFailedOTPAuth        = errors.New("Failed to match otp authorization")
+	ErrTwoFactorRequired    = errors.New("Session requires twofactor authentication")
+	ErrTwoFactorDone        = errors.New("Session has already completed twofactor authentication")
+	ErrTwoFactorNotRequired = errors.New("Session requires no twofactor authentication")
+	ErrFailedLogin          = errors.New("Failed to authenticate login credentails or no AUTH credentials found")
 )
 
 // SessionAPI implements the http api for responding to session request.
 type SessionAPI struct {
 	DB     *mdb.SessionDB
 	UserDB *userdb.UserDB
+}
+
+// TwoFactorAuthorizationCheck validates that a given user has being logged in, then checks if
+// two factor authorization is enabled and if it has not be completed on the session of the user,
+// if will direct to URL for two factor authentication. If user has already being authenticated with
+// two factor then nothing is done.
+// Must be used in conjunction with SessionAPI.Authenticate or SessionAPI.Login.
+func (s SessionAPI) TwoFactorAuthorizationCheck(ctx *httputil.Context) error {
+	userrec, ok := ctx.Bag().Get(users.NilUser)
+	if !ok {
+		return errors.New("No User stored from logged in session")
+	}
+
+	user, ok := userrec.(users.User)
+	if !ok {
+		return httputil.HTTPError{
+			Err:  errors.New("User type for User key is invalid"),
+			Code: http.StatusInternalServerError,
+		}
+	}
+
+	sessionrec, ok := ctx.Bag().Get(sessions.NilSession)
+	if !ok {
+		return errors.New("No Session currently available")
+	}
+
+	session, ok := sessionrec.(sessions.Session)
+	if !ok {
+		return errors.New("No Session currently available")
+	}
+
+	if !user.UseTwoFactor {
+		return nil
+	}
+
+	if user.UseTwoFactor && session.TwoFactorDone {
+		return nil
+	}
+
+	return ErrTwoFactorRequired
+}
+
+// TwoFactorAuthorization receives the provided incoming authorization user token
+// and validates that the provided user has the correct authorization token, which
+// will be validated else fail. It expects to receive a `token` param, which contains
+// user provided token.
+// Must be used in conjunction with SessionAPI.Authenticate or SessionAPI.Login.
+func (s SessionAPI) TwoFactorAuthorization(ctx *httputil.Context) error {
+	userrec, ok := ctx.Bag().Get(users.NilUser)
+	if !ok {
+		return errors.New("No User stored from logged in session")
+	}
+
+	user, ok := userrec.(users.User)
+	if !ok {
+		return httputil.HTTPError{
+			Err:  errors.New("User type for User key is invalid"),
+			Code: http.StatusInternalServerError,
+		}
+	}
+
+	sessionrec, ok := ctx.Bag().Get(sessions.NilSession)
+	if !ok {
+		return errors.New("No Session currently available")
+	}
+
+	session, ok := sessionrec.(sessions.Session)
+	if !ok {
+		return errors.New("No Session currently available")
+	}
+
+	token, ok := ctx.Bag().GetString("token")
+	token = strings.TrimSpace(token)
+	if !ok || token == "" {
+		ctx.SetFlash("error", "Token is not provided")
+		return errors.New("No twofactor token provided")
+	}
+
+	ctx.Metrics().Emit(metrics.Info("Recieved TwoFactor Token for Authorization").With("token", token))
+
+	if err := user.ValidateOTP(token); err != nil {
+		ctx.SetFlash("error", "Token provided is invalid: Does not match users OTP")
+
+		// Update totp to ensure time details are properly preserved.
+		if tokenerr := userdbapi.UpdateTOTP(ctx, ctx.Metrics(), s.UserDB, user); tokenerr != nil {
+			ctx.Metrics().Emit(metrics.YellowAlert(tokenerr, "User DB TOTP Update Failed"))
+		}
+
+		return err
+	}
+
+	if err := userdbapi.UpdateTOTP(ctx, ctx.Metrics(), s.UserDB, user); err != nil {
+		return httputil.HTTPError{
+			Code: http.StatusInternalServerError,
+			Err:  fmt.Errorf("User DB TOTP Update Failed: %+q", err),
+		}
+	}
+
+	ctx.SetFlash("notice", "Token validated")
+	session.TwoFactorDone = true
+
+	if err := s.DB.Update(ctx, session.PublicID, session); err != nil {
+		return err
+	}
+
+	ctx.Bag().Set(sessions.NilSession, session)
+
+	return nil
 }
 
 // AuthenticateMW returns a httputil middleware which handles obstruction of

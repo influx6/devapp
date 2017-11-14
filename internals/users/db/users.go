@@ -176,3 +176,18 @@ func Update(ctx context.Context, log metrics.Metrics, db *mdb.UserDB, nw users.U
 
 	return nil
 }
+
+// UpdateTOTP updates users totp field into the db record of the given user.
+func UpdateTOTP(ctx context.Context, log metrics.Metrics, db *mdb.UserDB, user users.User) error {
+	if err := db.Exec(ctx, func(col *mgo.Collection) error {
+		data := bson.M{"$set": bson.M{"totp": user.TOTP}}
+		query := bson.M{"public_id": user.PublicID}
+		log.Emit(metrics.Info("Updating user totp").With("data", data).With("query", query))
+		return col.Update(query, data)
+	}); err != nil {
+		log.Emit(metrics.Error(err).WithMessage("Failed to update user totp").With("user", user.PublicID))
+		return err
+	}
+
+	return nil
+}

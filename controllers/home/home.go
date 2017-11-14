@@ -12,13 +12,13 @@ import (
 
 var (
 	views = tmplutil.New().
-		Add("index.layout", static.MustReadFile("templates/index.html", true)).
+		Add("index.layout", static.MustReadFile("layout/index.html", true)).
 		Add("home.content", MustReadFile("home.html", true))
 )
 
 // Render renders the page for the home view.
 func Render(ctx *httputil.Context) error {
-	tmpl, err := views.From("index.layout", "home.content")
+	tmpl, err := views.FromWith(httputil.TextContextFunctions(ctx), "index.layout", "home.content")
 	if err != nil {
 		return err
 	}

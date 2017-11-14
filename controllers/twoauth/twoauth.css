@@ -1,3 +1,25 @@
 .two-factor {
-  
+  top: 50;
+}
+
+.bar-code img{
+  width: 50%;
+  height:50%;
+  display: block;
+  margin: 0 auto;
+  border: 10px solid rgba(222,222,222,1);
+  max-width: 300px;
+  max-height: 300px;
+}
+
+.space-bottom-30 {
+  margin-bottom: 30px;
+}
+
+.space-top-bottom-30 {
+  margin: 30px 0px;
+}
+
+.button-38h{
+  height: 38px;
 }

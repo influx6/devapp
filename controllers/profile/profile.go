@@ -4,6 +4,7 @@ package profile
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/influx6/devapp/internals/users"
@@ -14,7 +15,7 @@ import (
 
 var (
 	views = tmplutil.New().
-		Add("index.layout", static.MustReadFile("templates/index.html", true)).
+		Add("index.layout", static.MustReadFile("layout/index.html", true)).
 		Add("profile.content", MustReadFile("profile.html", true))
 )
 
@@ -30,11 +31,12 @@ func Render(ctx *httputil.Context) error {
 		return errors.New("User type for User key is invalid")
 	}
 
-	tmpl, err := views.From("index.layout", "profile.content")
+	tmpl, err := views.FromWith(httputil.TextContextFunctions(ctx), "index.layout", "profile.content")
 	if err != nil {
 		return err
 	}
 
+	ctx.SetFlash("notice", fmt.Sprintf("Welcome to your profile %+q", user.Username))
 	ctx.AddHeader("Content-Type", "text/html")
 	return ctx.Template(http.StatusOK, tmpl, struct {
 		User users.User

@@ -38,10 +38,11 @@ type EndSession struct {
 // Session defines a struct which holds the the details of a giving user session.
 // @mongoapi
 type Session struct {
-	UserID   string    `json:"user_id" bson:"user_id"`
-	PublicID string    `json:"public_id" bson:"public_id"`
-	Token    string    `json:"token" bson:"token"`
-	Expires  time.Time `json:"expires" bson:"expires"`
+	UserID        string    `json:"user_id" bson:"user_id"`
+	PublicID      string    `json:"public_id" bson:"public_id"`
+	Token         string    `json:"token" bson:"token"`
+	Expires       time.Time `json:"expires" bson:"expires"`
+	TwoFactorDone bool      `json:"twofactor_done" bson:"twofactor_done"`
 }
 
 // New returns a new instance of a session.
@@ -70,19 +71,21 @@ func (u Session) SessionToken() string {
 // SessionFields returns a map representing the user session.
 func (u Session) SessionFields() map[string]interface{} {
 	return map[string]interface{}{
-		"type":    "Bearer",
-		"token":   u.SessionToken(),
-		"expires": u.Expires.Format(time.RFC3339),
+		"type":           "Bearer",
+		"twofactor_done": u.TwoFactorDone,
+		"token":          u.SessionToken(),
+		"expires":        u.Expires.Format(time.RFC3339),
 	}
 }
 
 // Fields returns a map representing the data of the session.
 func (u Session) Fields() map[string]interface{} {
 	return map[string]interface{}{
-		"user_id":   u.UserID,
-		"token":     u.Token,
-		"public_id": u.PublicID,
-		"expires":   u.Expires.Format(time.RFC3339),
+		"user_id":        u.UserID,
+		"token":          u.Token,
+		"public_id":      u.PublicID,
+		"twofactor_done": u.TwoFactorDone,
+		"expires":        u.Expires.Format(time.RFC3339),
 	}
 }
 
@@ -104,6 +107,12 @@ func (u *Session) Consume(fields map[string]interface{}) error {
 		u.PublicID = public
 	} else {
 		return errors.New("Expected 'public_id' key")
+	}
+
+	if twofactor, ok := fields["twofactor_done"].(bool); ok {
+		u.TwoFactorDone = twofactor
+	} else {
+		return errors.New("Expected 'twofactor_done' key")
 	}
 
 	if token, ok := fields["token"].(string); ok {

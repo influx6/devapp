@@ -1,21 +1,18 @@
 {{define "nav"}}
 {{end}}
 {{define "content"}}
-<section class="two-factor grid-block grid-full">
-  <section class="bar-code grid-block grid-half one-half">
-    <img src="data:image/png;base64,{{.User.QR}}" />
-  </section>
-  <section class="twofactor-code grid-block grid-half one-half">
+<section class="two-factor grid-block grid-full one-whole">
+  <section class="twofactor-code grid-block grid-full grid-center one-whole">
     <p>Enter Authorization Code from Google Authenticator</p>
-    <form class="twofactor-code-form" action="" method="">
+    <form class="twofactor-code-form" action="/session/twofactor/finish" method="post">
       <input type="hidden" name="user_name" value="{{.User.Username}}">
       <input type="hidden" name="user_public_id" value="{{.User.PublicID}}">
-      <input type="text" name="userCode" value="" placeholder="GoogleAuth Code">
-      <input type="submit" name="submit" value="Submit">
+      <input class="input text" type="text" name="token" value="" placeholder="GoogleAuth Code">
+      <button class="button button-38h" name="submit">Authenticate</button>
     </form>
   </section>
 </section>
 {{end}}
 {{define "styles"}}
-<link rel="stylesheet" href="/static-controllers/twoauth/master.css">
+<link rel="stylesheet" href="/static-controllers/twoauth/twoauth.css">
 {{end}}

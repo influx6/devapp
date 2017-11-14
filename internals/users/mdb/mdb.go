@@ -683,10 +683,10 @@ func (mdb *UserDB) Update(ctx context.Context, publicID string, elem users.User)
 		return err
 	}
 
-	if fields, ok := interface{}(elem).(UserBSON); ok {
-		query := fields.BSON()
+	query := bson.M{"public_id": publicID}
 
-		if err := database.C(mdb.col).Insert(query); err != nil {
+	if fields, ok := interface{}(elem).(UserBSON); ok {
+		if err := database.C(mdb.col).Update(query, fields.BSON()); err != nil {
 			mdb.metrics.Emit(metrics.Errorf("Failed to update User record").
 				With("collection", mdb.col).
 				With("public_id", publicID).
@@ -697,18 +697,16 @@ func (mdb *UserDB) Update(ctx context.Context, publicID string, elem users.User)
 		}
 
 		mdb.metrics.Emit(metrics.Info("Update record").
+			With("query", query).
 			With("collection", mdb.col).
 			With("public_id", publicID).
-			With("query", query).
-			With("error", err.Error()))
+			With("data", fields.BSON()))
 
 		return nil
 	}
 
 	if fields, ok := interface{}(elem).(UserFields); ok {
-		query := bson.M(fields.Fields())
-
-		if err := database.C(mdb.col).Insert(query); err != nil {
+		if err := database.C(mdb.col).Update(query, fields.Fields()); err != nil {
 			mdb.metrics.Emit(metrics.Errorf("Failed to update User record").
 				With("query", query).
 				With("public_id", publicID).
@@ -720,13 +718,12 @@ func (mdb *UserDB) Update(ctx context.Context, publicID string, elem users.User)
 		mdb.metrics.Emit(metrics.Info("Create record").
 			With("collection", mdb.col).
 			With("query", query).
-			With("public_id", publicID).
-			With("error", err.Error()))
+			With("data", fields.Fields()).
+			With("public_id", publicID))
 
 		return nil
 	}
 
-	query := bson.M{"publicID": publicID}
 	queryData := bson.M(map[string]interface{}{
 
 		"hash": elem.Hash,
@@ -746,6 +743,7 @@ func (mdb *UserDB) Update(ctx context.Context, publicID string, elem users.User)
 		mdb.metrics.Emit(metrics.Errorf("Failed to update User record").
 			With("collection", mdb.col).
 			With("query", query).
+			With("data", queryData).
 			With("public_id", publicID).
 			With("error", err.Error()))
 		return err

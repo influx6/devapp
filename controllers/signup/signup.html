@@ -2,13 +2,13 @@
 <section class="signup grid-full grid-center one-whole one-whole-height">
   <form class="user_form signup_form grid-block grid-full" action="/users/new" method="post">
     <fieldset class="username_fieldset">
-      <input class="one-whole" type="text" name="username" value="" placeholder="Username">
+      <input class="one-whole" type="text" name="username" value="{{.CachedUser.Username}}" placeholder="Username">
     </fieldset>
     <fieldset class="password_fieldset">
-      <input class="one-whole" type="password" name="password" value="" placeholder="Password">
+      <input class="one-whole" type="password" name="password" value="{{.CachedUser.Password}}" placeholder="Password">
     </fieldset>
     <fieldset class="password_confirm_fieldset">
-      <input class="one-whole" type="password" name="password_confirm" value="" placeholder="Confirm Password">
+      <input class="one-whole" type="password" name="password_confirm" value="{{.CachedUser.PasswordConfirm}}" placeholder="Confirm Password">
     </fieldset>
     <fieldset>
       <button type="submit" name="submit">Signup</button>

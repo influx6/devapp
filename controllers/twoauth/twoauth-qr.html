@@ -1,0 +1,23 @@
+{{define "nav"}}
+<ul>
+  <li><a href="/profile">Profile</a></li>
+</ul>
+{{end}}
+{{define "content"}}
+<section class="two-factor grid-block grid-full one-whole">
+  {{if .User.SeenTwoFactor }}
+  <section class="bar-code grid-block grid-full one-whole">
+    <h3 class="space-bottom-30 center-align">Should already be in your Google Authenticator App</h3>
+  </section>
+  {{else}}
+  <section class="bar-code grid-block grid-full one-whole">
+    <h3 class="space-bottom-30 center-align">Scan QR with Google Authenticator</h3>
+    <img src="data:image/png;base64,{{.User.QR}}" />
+    <h4 class="space-top-bottom-30 center-align">User: {{.User.Username}}</h4>
+  </section>
+  {{end}}
+</section>
+{{end}}
+{{define "styles"}}
+<link rel="stylesheet" href="/static-controllers/twoauth/twoauth.css">
+{{end}}

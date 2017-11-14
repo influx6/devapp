@@ -321,9 +321,13 @@ func (mdb *SessionDB) Create(ctx context.Context, elem sessions.Session) error {
 
 	query := bson.M(map[string]interface{}{
 
+		"expires": elem.Expires,
+
 		"public_id": elem.PublicID,
 
 		"token": elem.Token,
+
+		"twofactor_done": elem.TwoFactorDone,
 
 		"user_id": elem.UserID,
 	})
@@ -620,7 +624,7 @@ func (mdb *SessionDB) Get(ctx context.Context, publicID string) (sessions.Sessio
 	var item sessions.Session
 
 	if err := database.C(mdb.col).Find(query).One(&item); err != nil {
-		mdb.metrics.Emit(metrics.Errorf("Failed to retrieve record of Session type from db").
+		mdb.metrics.Emit(metrics.Errorf("Failed to retrieve all records of Session type from db").
 			With("query", query).
 			With("collection", mdb.col).
 			With("error", err.Error()))
@@ -677,10 +681,10 @@ func (mdb *SessionDB) Update(ctx context.Context, publicID string, elem sessions
 		return err
 	}
 
-	if fields, ok := interface{}(elem).(SessionBSON); ok {
-		query := fields.BSON()
+	query := bson.M{"public_id": publicID}
 
-		if err := database.C(mdb.col).Insert(query); err != nil {
+	if fields, ok := interface{}(elem).(SessionBSON); ok {
+		if err := database.C(mdb.col).Update(query, fields.BSON()); err != nil {
 			mdb.metrics.Emit(metrics.Errorf("Failed to update Session record").
 				With("collection", mdb.col).
 				With("public_id", publicID).
@@ -691,18 +695,16 @@ func (mdb *SessionDB) Update(ctx context.Context, publicID string, elem sessions
 		}
 
 		mdb.metrics.Emit(metrics.Info("Update record").
+			With("query", query).
 			With("collection", mdb.col).
 			With("public_id", publicID).
-			With("query", query).
-			With("error", err.Error()))
+			With("data", fields.BSON()))
 
 		return nil
 	}
 
 	if fields, ok := interface{}(elem).(SessionFields); ok {
-		query := bson.M(fields.Fields())
-
-		if err := database.C(mdb.col).Insert(query); err != nil {
+		if err := database.C(mdb.col).Update(query, fields.Fields()); err != nil {
 			mdb.metrics.Emit(metrics.Errorf("Failed to update Session record").
 				With("query", query).
 				With("public_id", publicID).
@@ -714,18 +716,21 @@ func (mdb *SessionDB) Update(ctx context.Context, publicID string, elem sessions
 		mdb.metrics.Emit(metrics.Info("Create record").
 			With("collection", mdb.col).
 			With("query", query).
-			With("public_id", publicID).
-			With("error", err.Error()))
+			With("data", fields.Fields()).
+			With("public_id", publicID))
 
 		return nil
 	}
 
-	query := bson.M{"publicID": publicID}
 	queryData := bson.M(map[string]interface{}{
+
+		"expires": elem.Expires,
 
 		"public_id": elem.PublicID,
 
 		"token": elem.Token,
+
+		"twofactor_done": elem.TwoFactorDone,
 
 		"user_id": elem.UserID,
 	})
@@ -734,6 +739,7 @@ func (mdb *SessionDB) Update(ctx context.Context, publicID string, elem sessions
 		mdb.metrics.Emit(metrics.Errorf("Failed to update Session record").
 			With("collection", mdb.col).
 			With("query", query).
+			With("data", queryData).
 			With("public_id", publicID).
 			With("error", err.Error()))
 		return err

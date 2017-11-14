@@ -11,6 +11,10 @@ import (
 var sessionJSON = `{
 
 
+    "expires":	nil,
+
+    "twofactor_done":	false,
+
     "user_id":	"",
 
     "public_id":	"",
@@ -26,7 +30,11 @@ var sessionCreateJSON = `{
 
     "public_id":	"",
 
-    "token":	""
+    "token":	"",
+
+    "expires":	nil,
+
+    "twofactor_done":	false
 
 }`
 
@@ -37,7 +45,11 @@ var sessionUpdateJSON = `{
 
     "public_id":	"",
 
-    "token":	""
+    "token":	"",
+
+    "expires":	nil,
+
+    "twofactor_done":	false
 
 }`
 

@@ -1,7 +1,6 @@
 package main
 
-//go:generate go generate ./controllers/home/...
-//go:generate go generate ./controllers/signup/...
+//go:generate go generate ./controllers/...
 //go:generate go generate ./static/...
 
 import (
@@ -16,7 +15,6 @@ import (
 	"github.com/influx6/devapp/controllers/profile"
 	"github.com/influx6/devapp/controllers/signup"
 	"github.com/influx6/devapp/controllers/twoauth"
-	profileapi "github.com/influx6/devapp/internals/profiles/handler"
 	sessionsapi "github.com/influx6/devapp/internals/sessions/handler"
 	sessionsdbapi "github.com/influx6/devapp/internals/sessions/mdb"
 	userapi "github.com/influx6/devapp/internals/users/handler"
@@ -81,7 +79,7 @@ func main() {
 
 	users := userapi.UserAPI{DB: usersdb}
 	sessions := sessionsapi.SessionAPI{DB: sessionsdb, UserDB: usersdb}
-	profiles := profileapi.ProfileAPI{Sessions: sessions}
+	// profiles := profileapi.ProfileAPI{Sessions: sessions}
 
 	m := mux.NewRouter()
 	m.NotFoundHandler = httputil.HTTPFunc(httputil.NotFound)
@@ -105,7 +103,11 @@ func main() {
 	m.HandleFunc("/profile", httputil.HTTPFunc(mw(
 		httputil.HTTPConditionFunc(
 			sessions.Login,
-			profile.Render,
+			httputil.HTTPConditionFunc(
+				sessions.TwoFactorAuthorizationCheck,
+				profile.Render,
+				httputil.HTTPRedirect("/session/twofactor", http.StatusTemporaryRedirect),
+			),
 			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
 		),
 	)))
@@ -114,15 +116,31 @@ func main() {
 		httputil.HTTPConditionFunc(
 			users.CreateUserFromURLEncoded,
 			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
-			httputil.HTTPRedirect("/signup", http.StatusTemporaryRedirect),
+			signup.Render,
 		),
 	)))
 
 	// login-logout
 	m.HandleFunc("/session/twofactor", httputil.HTTPFunc(mw(
 		httputil.HTTPConditionFunc(
-			sessions.Login,
-			twoauth.Render,
+			sessions.Authenticate,
+			httputil.HTTPConditionFunc(
+				sessions.TwoFactorAuthorizationCheck,
+				httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+				twoauth.Render,
+			),
+			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
+		),
+	)))
+
+	m.HandleFunc("/session/twofactor/finish", httputil.HTTPFunc(mw(
+		httputil.HTTPConditionFunc(
+			sessions.Authenticate,
+			httputil.HTTPConditionFunc(
+				sessions.TwoFactorAuthorization,
+				httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+				twoauth.Render,
+			),
 			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
 		),
 	)))
@@ -130,7 +148,11 @@ func main() {
 	m.HandleFunc("/session/new", httputil.HTTPFunc(mw(
 		httputil.HTTPConditionFunc(
 			sessions.Login,
-			httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+			httputil.HTTPConditionFunc(
+				sessions.TwoFactorAuthorizationCheck,
+				httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+				httputil.HTTPRedirect("/session/twofactor", http.StatusTemporaryRedirect),
+			),
 			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
 		),
 	)))
@@ -143,11 +165,47 @@ func main() {
 		),
 	)))
 
-	// api routes
-	m.HandleFunc("/api/profiles", httputil.HTTPFunc(mw(profiles.Get)))
-	m.HandleFunc("/api/users/new", httputil.HTTPFunc(mw(users.CreateUserFromURLEncoded)))
-	m.HandleFunc("/api/sessions/login", httputil.HTTPFunc(mw(sessions.Login)))
-	m.HandleFunc("/api/sessions/logout", httputil.HTTPFunc(mw(sessions.Logout)))
+	m.HandleFunc("/users/twofactor", httputil.HTTPFunc(mw(
+		httputil.HTTPConditionFunc(
+			sessions.Login,
+			httputil.HTTPConditionFunc(
+				twoauth.RenderQR,
+				users.SetTwoFactorAsSeen,
+				httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+			),
+			httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
+		),
+	)))
+
+	m.HandleFunc("/users/twofactor/enable", httputil.HTTPFunc(mw(
+		httputil.HTTPConditionFunc(
+			sessions.Authenticate,
+			httputil.HTTPConditionFunc(
+				users.EnableTwoFactor,
+				httputil.HTTPRedirect("/users/twofactor", http.StatusTemporaryRedirect),
+				httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
+			),
+			httputil.BadRequest,
+		),
+	)))
+
+	m.HandleFunc("/users/twofactor/disable", httputil.HTTPFunc(mw(
+		httputil.HTTPConditionFunc(
+			sessions.Authenticate,
+			httputil.HTTPConditionFunc(
+				users.DisableTwoFactor,
+				httputil.HTTPRedirect("/profile", http.StatusTemporaryRedirect),
+				httputil.HTTPRedirect("/", http.StatusTemporaryRedirect),
+			),
+			httputil.BadRequest,
+		),
+	)))
+
+	// // api routes
+	// m.HandleFunc("/api/profiles", httputil.HTTPFunc(mw(profiles.Get)))
+	// m.HandleFunc("/api/users/new", httputil.HTTPFunc(mw(users.CreateUserFromURLEncoded)))
+	// m.HandleFunc("/api/sessions/login", httputil.HTTPFunc(mw(sessions.Login)))
+	// m.HandleFunc("/api/sessions/logout", httputil.HTTPFunc(mw(sessions.Logout)))
 
 	server, err := httputil.Listen(false, fmt.Sprintf(":%s", *port), m)
 	if err != nil {
